@@ -1,52 +1,19 @@
-function StatusCard({ status }) {
-  const statuses = [
-    "UPLOADED",
-    "QUEUED",
-    "PROCESSING",
-    "COMPLETED",
-  ];
+import React from 'react';
 
-  const currentIndex = statuses.indexOf(status);
-
+export default function StatusCard({ status, filename, errorMessage }) {
   return (
-    <div className="status-card">
-      <h3>Processing Status</h3>
-
-      {/* Status Flow */}
-      <div className="status-flow">
-        {statuses.map((item, index) => (
-          <div
-            key={item}
-            className={`status-step ${
-              index <= currentIndex ? "active" : ""
-            } ${item === status ? "current" : ""}`}
-          >
-            <div className="status-circle">
-              {index + 1}
-            </div>
-
-            <span>{item}</span>
-
-            {index < statuses.length - 1 && (
-              <div className="status-line"></div>
-            )}
-          </div>
-        ))}
+    <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <span style={{ fontWeight: '600', color: '#334155' }}>{filename}</span>
+        <span className={`badge badge-${status.toLowerCase()}`}>{status}</span>
       </div>
-
-      {/* Failed Message */}
-      {status === "FAILED" && (
-        <div className="failed-message">
-          Processing failed. Please check the file and try again.
-        </div>
-      )}
-
-      {/* Current Status */}
-      <p className="current-status">
-        Current Status: <strong>{status}</strong>
+      <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
+        {status === 'UPLOADED' && 'File received in local staging state.'}
+        {status === 'QUEUED' && 'Job placed in asynchronous queue.'}
+        {status === 'PROCESSING' && 'Lambda execution in progress...'}
+        {status === 'COMPLETED' && 'File successfully processed and stored!'}
+        {status === 'FAILED' && (errorMessage || 'Processing failed.')}
       </p>
     </div>
   );
 }
-
-export default StatusCard;

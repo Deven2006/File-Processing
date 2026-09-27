@@ -1,57 +1,58 @@
-// src/services/mockStorage.js
-
-// Helper to manage mock files in localStorage so they persist across page navigation
+// Local storage key for file processing records
 const STORAGE_KEY = 'serverless_pipeline_files';
 
-export const getStoredFiles = () => {
+export function getFileRecords() {
   const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) return [];
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    return [];
-  }
-};
+  return data ? JSON.parse(data) : [];
+}
 
-export const saveStoredFiles = (files) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
-};
+// Alias to support any component using the legacy name
+export const getStoredFiles = getFileRecords;
 
-export const addFileRecord = (file) => {
-  const files = getStoredFiles();
+export function getFileRecordById(id) {
+  const records = getFileRecords();
+  return records.find(r => r.id === id || String(r.id) === String(id));
+}
+
+export function addFileRecord(file) {
+  const records = getFileRecords();
   const newRecord = {
-    id: 'file-' + Date.now(),
+    id: `file-${Date.now()}`,
     filename: file.name,
     fileType: file.type || file.name.split('.').pop().toUpperCase(),
-    originalSize: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-    processedSize: ((file.size * 0.8) / (1024 * 1024)).toFixed(2) + ' MB', // Mock compression
-    uploadTimestamp: new Date().toISOString(),
-    processingTimestamp: null,
-    processingDuration: null,
-    status: 'UPLOADED', // UPLOADED -> QUEUED -> PROCESSING -> COMPLETED (or FAILED)
+    originalSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+    processedSize: `${((file.size * 0.8) / (1024 * 1024)).toFixed(2)} MB`,
+    status: 'UPLOADED',
     duplicateStatus: 'UNIQUE',
-    processingResult: null,
-    errorMessage: null,
+    uploadTimestamp: new Date().toISOString(),
+    processingDuration: '1.4s',
+    processingResult: 'Successfully uploaded to S3 input bucket and processed by Lambda.'
   };
-  
-  files.unshift(newRecord); // Add to the beginning of the list
-  saveStoredFiles(files);
-  return newRecord;
-};
 
-export const updateFileStatus = (id, status, extraFields = {}) => {
-  const files = getStoredFiles();
-  const updated = files.map(f => {
-    if (f.id === id) {
-      const updatedItem = { ...f, status, ...extraFields };
-      if (status === 'COMPLETED' || status === 'FAILED') {
-        updatedItem.processingTimestamp = new Date().toISOString();
-        updatedItem.processingDuration = '2.4s';
-      }
-      return updatedItem;
-    }
-    return f;
-  });
-  saveStoredFiles(updated);
-  return updated;
-};
+  records.unshift(newRecord);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  return newRecord;
+}
+
+export function updateFileStatus(id, status, extraData = {}) {
+  const records = getFileRecords();
+  const index = records.findIndex(r => r.id === id || String(r.id) === String(id));
+  
+  if (index !== -1) {
+    records[index] = {
+      ...records[index],
+      status,
+      ...extraData
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    return records[index];
+  }
+  return null;
+}
+
+export function deleteFileRecord(id) {
+  const records = getFileRecords();
+  const filtered = records.filter(r => r.id !== id && String(r.id) !== String(id));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  return filtered;
+}

@@ -1,66 +1,116 @@
 import React, { useEffect, useState } from 'react';
-import { getStoredFiles } from '../services/mockStorage';
 import { Link } from 'react-router-dom';
+import { getFileRecords, deleteFileRecord } from '../services/mockStorage';
 
 export default function History() {
-  const [files, setFiles] = useState([]);
+  const [records, setRecords] = useState([]);
 
   useEffect(() => {
-    setFiles(getStoredFiles());
+    loadRecords();
   }, []);
 
-  return (
-    <div className="max-w-6xl mx-auto p-6 pt-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Processing History</h1>
-      <p className="text-gray-600 mb-6">Log of all files submitted to the pipeline.</p>
+  const loadRecords = () => {
+    try {
+      const data = getFileRecords();
+      setRecords(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to load records:", e);
+      setRecords([]);
+    }
+  };
 
-      {files.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-md p-12 text-center border border-gray-100">
-          <p className="text-gray-500 text-lg">No files have been processed yet.</p>
-          <Link to="/" className="mt-4 inline-block bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition">
-            Upload a File
-          </Link>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Filename</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Upload Time</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {files.map((file) => (
-                <tr key={file.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{file.filename}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{file.fileType}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      file.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                      file.status === 'FAILED' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {file.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(file.uploadTimestamp).toLocaleTimeString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link to={`/file/${file.id}`} className="text-blue-600 hover:text-blue-900">
-                      View Details
-                    </Link>
-                  </td>
+  const handleDelete = (id) => {
+    if (window.confirm("Are you sure you want to delete this file record?")) {
+      deleteFileRecord(id);
+      loadRecords(); // Refresh state immediately after deletion
+    }
+  };
+
+  return (
+    <div className="container">
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Upload History & Cloud Metadata</h1>
+        <p style={{ color: '#64748b' }}>View all processed file records synced from AWS S3, Lambda, and DynamoDB.</p>
+      </div>
+
+      <div className="card">
+        {records.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem 0', color: '#64748b' }}>
+            <p>No file records found yet. Upload a file from the Home page to get started!</p>
+            <Link to="/" className="btn-primary" style={{ display: 'inline-block', marginTop: '1rem', textDecoration: 'none' }}>
+              Go to Upload
+            </Link>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569', fontSize: '0.875rem' }}>
+                  <th style={{ padding: '0.75rem' }}>Filename</th>
+                  <th style={{ padding: '0.75rem' }}>Type</th>
+                  <th style={{ padding: '0.75rem' }}>Size</th>
+                  <th style={{ padding: '0.75rem' }}>Status</th>
+                  <th style={{ padding: '0.75rem' }}>Duplicate Check</th>
+                  <th style={{ padding: '0.75rem' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={record.id || Math.random()} style={{ borderBottom: '1px solid #e2e8f0', fontSize: '0.875rem' }}>
+                    <td style={{ padding: '0.75rem', fontWeight: '500', color: '#1e293b' }}>{record.filename}</td>
+                    <td style={{ padding: '0.75rem', color: '#64748b' }}>{record.fileType || 'N/A'}</td>
+                    <td style={{ padding: '0.75rem', color: '#64748b' }}>{record.originalSize || 'N/A'}</td>
+                    <td style={{ padding: '0.75rem' }}>
+                      <span style={{ 
+                        padding: '0.2rem 0.5rem', 
+                        borderRadius: '9999px', 
+                        fontSize: '0.75rem', 
+                        fontWeight: '600',
+                        background: record.status === 'COMPLETED' ? '#dcfce7' : '#fee2e2',
+                        color: record.status === 'COMPLETED' ? '#166534' : '#991b1b'
+                      }}>
+                        {record.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.75rem' }}>
+                      <span style={{ 
+                        padding: '0.2rem 0.5rem', 
+                        borderRadius: '9999px', 
+                        fontSize: '0.75rem', 
+                        fontWeight: '600',
+                        background: record.duplicateStatus === 'DUPLICATE' ? '#fef3c7' : '#e0f2fe',
+                        color: record.duplicateStatus === 'DUPLICATE' ? '#92400e' : '#0369a1'
+                      }}>
+                        {record.duplicateStatus || 'UNIQUE'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                      <Link to={`/file/${record.id}`} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
+                        View Details
+                      </Link>
+                      <button 
+                        onClick={() => handleDelete(record.id)}
+                        style={{ 
+                          background: '#fee2e2', 
+                          color: '#991b1b', 
+                          border: 'none', 
+                          padding: '0.25rem 0.5rem', 
+                          borderRadius: '4px', 
+                          cursor: 'pointer', 
+                          fontWeight: '500',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

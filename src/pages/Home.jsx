@@ -2,78 +2,94 @@ import React, { useState } from 'react';
 import FileUpload from '../components/FileUpload';
 import StatusCard from '../components/StatusCard';
 import { addFileRecord, updateFileStatus } from '../services/mockStorage';
+import { uploadFileToS3 } from '../services/s3Service';
 
 export default function Home() {
   const [currentFile, setCurrentFile] = useState(null);
   const [currentRecord, setCurrentRecord] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const handleFileSelect = (file) => {
     setCurrentFile(file);
     setCurrentRecord(null);
+    setUploadError('');
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!currentFile) return;
 
     setIsProcessing(true);
-    
+    setUploadError('');
+
     // 1. Create initial record in mock storage
     const record = addFileRecord(currentFile);
     setCurrentRecord(record);
 
-    // Simulate lifecycle sequence locally: UPLOADED -> QUEUED -> PROCESSING -> COMPLETED
-    setTimeout(() => {
-      updateFileStatus(record.id, 'QUEUED');
-      setCurrentRecord(prev => ({ ...prev, status: 'QUEUED' }));
-    }, 1500);
+    try {
+      // 2. Upload file to AWS S3 Input Bucket
+      updateFileStatus(record.id, 'UPLOADED');
+      setCurrentRecord(prev => ({ ...prev, status: 'UPLOADED' }));
 
-    setTimeout(() => {
-      updateFileStatus(record.id, 'PROCESSING');
-      setCurrentRecord(prev => ({ ...prev, status: 'PROCESSING' }));
-    }, 3000);
+      const s3Result = await uploadFileToS3(currentFile);
 
-    setTimeout(() => {
-      // Randomly simulate success vs rare failure for testing (90% success)
-      const isFailure = Math.random() < 0.1;
-      const finalStatus = isFailure ? 'FAILED' : 'COMPLETED';
-      const extra = isFailure 
-        ? { errorMessage: 'Error: Failed to parse file structure during serverless execution.' }
-        : { processingResult: 'Successfully processed and stored in output bucket.' };
+      if (!s3Result.success) {
+        throw new Error(s3Result.error || 'Failed to upload to S3');
+      }
 
-      updateFileStatus(record.id, finalStatus, extra);
-      setCurrentRecord(prev => ({ ...prev, status: finalStatus, ...extra }));
+      // 3. Update status to QUEUED and PROCESSING (Lambda is processing it in the cloud)
+      setTimeout(() => {
+        updateFileStatus(record.id, 'QUEUED');
+        setCurrentRecord(prev => ({ ...prev, status: 'QUEUED' }));
+      }, 1000);
+
+      setTimeout(() => {
+        updateFileStatus(record.id, 'PROCESSING');
+        setCurrentRecord(prev => ({ ...prev, status: 'PROCESSING' }));
+      }, 2500);
+
+      setTimeout(() => {
+        const finalStatus = 'COMPLETED';
+        const extra = { 
+          processingResult: `Successfully uploaded to S3 (${s3Result.bucket}) and processed by Lambda/DynamoDB.` 
+        };
+
+        updateFileStatus(record.id, finalStatus, extra);
+        setCurrentRecord(prev => ({ ...prev, status: finalStatus, ...extra }));
+        setIsProcessing(false);
+      }, 4500);
+
+    } catch (err) {
+      console.error(err);
+      updateFileStatus(record.id, 'FAILED', { errorMessage: err.message });
+      setCurrentRecord(prev => ({ ...prev, status: 'FAILED', errorMessage: err.message }));
+      setUploadError(err.message);
       setIsProcessing(false);
-    }, 5500);
+    }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 pt-8">
-      <div className="bg-white rounded-xl shadow-md p-8 mb-8 border border-gray-100">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Scalable Serverless File Processing Pipeline
-        </h1>
-        <p className="text-gray-600 mb-6">
-          Upload your file and let the cloud process it automatically. Supported formats: JPG, JPEG, PNG, PDF, CSV, TXT (Max size: 5 MB).
-        </p>
+    <div className="container">
+      <div className="card">
+        <h1>Scalable Serverless File Processing Pipeline</h1>
+        <p>Upload your file directly to AWS S3 and let the cloud process it automatically. Supported formats: JPG, JPEG, PNG, PDF, CSV, TXT (Max size: 5 MB).</p>
 
         <FileUpload onFileSelect={handleFileSelect} />
 
+        {uploadError && <div className="alert-error" style={{ marginTop: '1rem' }}>{uploadError}</div>}
+
         {currentFile && !isProcessing && !currentRecord && (
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={handleUpload}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg transition shadow-sm cursor-pointer"
-            >
-              Start Upload & Pipeline
+          <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+            <button onClick={handleUpload} className="btn-primary">
+              Upload to S3 & Run Pipeline
             </button>
           </div>
         )}
       </div>
 
       {currentRecord && (
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Pipeline Execution Status</h2>
+        <div className="card">
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>Pipeline Execution Status</h2>
           <StatusCard 
             status={currentRecord.status} 
             filename={currentRecord.filename} 
